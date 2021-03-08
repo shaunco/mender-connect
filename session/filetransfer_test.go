@@ -16,6 +16,8 @@ package session
 
 import (
 	"bytes"
+	"github.com/mendersoftware/mender-connect/config"
+	"github.com/mendersoftware/mender-connect/session/model"
 	"io"
 	"io/ioutil"
 	"os"
@@ -40,7 +42,7 @@ func TestFileTransferUpload(t *testing.T) {
 	testCases := []struct {
 		Name string
 
-		Params FileInfo
+		Params model.FileInfo
 
 		// TransferMessages, if set, are sent before file contents
 		TransferMessages []*ws.ProtoMsg
@@ -53,7 +55,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}{{
 		Name: "ok",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(testdir, "mkay")
 				return &p
@@ -68,7 +70,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}, {
 		Name: "error, fake error from client",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(testdir, "clienterr")
 				return &p
@@ -94,7 +96,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}, {
 		Name: "error, unexpected ACK message from client",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(testdir, "ackerr")
 				return &p
@@ -112,7 +114,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}, {
 		Name: "error, chunk missing offset",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(testdir, "offseterr")
 				return &p
@@ -132,7 +134,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}, {
 		Name: "error, offset jumps beyond EOF",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(testdir, "badOffset")
 				return &p
@@ -155,7 +157,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}, {
 		Name: "error, broken response writer",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(testdir, "errfile")
 				return &p
@@ -166,7 +168,7 @@ func TestFileTransferUpload(t *testing.T) {
 	}, {
 		Name: "error, parent directory does not exist",
 
-		Params: FileInfo{
+		Params: model.FileInfo{
 			Path: func() *string {
 				p := path.Join(
 					testdir, "parent", "dir",
@@ -185,7 +187,7 @@ func TestFileTransferUpload(t *testing.T) {
 			t.Parallel()
 
 			recorder := NewTestWriter(tc.WriteError)
-			handler := FileTransfer()().(*FileTransferHandler)
+			handler := FileTransfer(config.Limits{})().(*FileTransferHandler)
 			b, _ := msgpack.Marshal(tc.Params)
 			request := &ws.ProtoMsg{
 				Header: ws.ProtoHdr{
@@ -474,7 +476,7 @@ func TestFileTransferDownload(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 			w := NewChanWriter(ACKSlidingWindowRecv)
-			handler := FileTransfer()().(*FileTransferHandler)
+			handler := FileTransfer(config.Limits{})().(*FileTransferHandler)
 			fd, err := ioutil.TempFile(testdir, "testfile")
 			if err != nil {
 				panic(err)
@@ -716,7 +718,7 @@ func TestFileTransferStat(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := FileTransfer()()
+			handler := FileTransfer(config.Limits{})()
 			w := NewTestWriter(tc.WriteError)
 			handler.ServeProtoMsg(tc.Message, w)
 			tc.ResponseValidator(t, w.Messages)
@@ -902,7 +904,7 @@ func TestFileTransferServeErrors(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := FileTransfer()().(*FileTransferHandler)
+			handler := FileTransfer(config.Limits{})().(*FileTransferHandler)
 			if tc.LockMutex {
 				handler.mutex <- struct{}{}
 			}
