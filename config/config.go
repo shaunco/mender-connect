@@ -82,8 +82,12 @@ type FileTransferLimits struct {
 	AllowOverwrite bool
 	// set the owner of new files to OwnerPut
 	OwnerPut string
+	// set the owner of new files to OwnerPut
+	GroupPut string
 	// allow to get only files owned by OwnerGet
 	OwnerGet string
+	// allow to get only files owned by OwnerGet
+	GroupGet string
 	// umask for new files
 	Umask string
 	// Maximum allowed file size

@@ -107,7 +107,7 @@ func (p *Permit) UploadFile(fileStat model.FileInfo) error {
 
 	//this one actually does nothing, since at the moment of writing,
 	//InitFileUpload does not get the size of the file upfront,
-	//so this potentially can work once UI sends
+	//so this potentially can work once the remote sends the size
 	if p.limits.FileTransfer.MaxFileSize > 0 &&
 		fileStat.Size != nil &&
 		uint64(*fileStat.Size) > p.limits.FileTransfer.MaxFileSize {
@@ -138,12 +138,14 @@ func (p *Permit) UploadFile(fileStat model.FileInfo) error {
 			return ErrFileOwnerMismatch
 		}
 
-		if !utils.FileGroupMatches(filePath, p.limits.FileTransfer.OwnerPut) {
-			return ErrFileOwnerMismatch
+		if !utils.FileGroupMatches(filePath, p.limits.FileTransfer.GroupPut) {
+			return ErrFileGroupMismatch
 		}
 	}
 
-	if !p.limits.FileTransfer.AllowSuid && (os.FileMode(*fileStat.Mode)&os.ModeSetuid) != 0 {
+	if !p.limits.FileTransfer.AllowSuid &&
+		fileStat.Mode != nil &&
+		(os.FileMode(*fileStat.Mode)&os.ModeSetuid) != 0 {
 		return ErrSuidModeForbidden
 	}
 
@@ -169,7 +171,7 @@ func (p *Permit) DownloadFile(fileStat model.FileInfo) error {
 		return ErrFileOwnerMismatch
 	}
 
-	if !utils.FileGroupMatches(filePath, p.limits.FileTransfer.OwnerGet) {
+	if !utils.FileGroupMatches(filePath, p.limits.FileTransfer.GroupGet) {
 		return ErrFileGroupMismatch
 	}
 
@@ -308,6 +310,7 @@ func (p *Permit) PreserveOwnerGroup(path string, uid int, gid int) error {
 		return nil
 	}
 
+	forcedSet := false
 	if p.limits.FileTransfer.OwnerPut != "" {
 		u, err := user.Lookup(p.limits.FileTransfer.OwnerPut)
 		if err != nil {
@@ -317,6 +320,20 @@ func (p *Permit) PreserveOwnerGroup(path string, uid int, gid int) error {
 		if err != nil {
 			return err
 		}
+		forcedSet = true
+	}
+	if p.limits.FileTransfer.GroupPut != "" {
+		u, err := user.LookupGroup(p.limits.FileTransfer.GroupPut)
+		if err != nil {
+			return err
+		}
+		gid, err = strconv.Atoi(u.Gid)
+		if err != nil {
+			return err
+		}
+		forcedSet = true
+	}
+	if forcedSet {
 		return os.Chown(path, uid, gid)
 	}
 	if !p.limits.FileTransfer.DoNotPreserveOwner {

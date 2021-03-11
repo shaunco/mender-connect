@@ -376,9 +376,20 @@ func TestPermit_BelowMaxAllowedFileSize(t *testing.T) {
 }
 
 func TestPermit_DownloadFile(t *testing.T) {
+	u, _ := user.Current()
+	if u == nil {
+		t.Fatal("cant get current user")
+	}
+	currentUser := u.Name
+	currentGroup, _ := user.LookupGroupId(u.Gid)
+	if currentGroup == nil {
+		t.Fatal("cant get current group")
+	}
+
 	testCases := []struct {
 		Name             string
 		Permit           *Permit
+		FilePath         string
 		ExpectedDownload error
 	}{
 		{
@@ -389,6 +400,7 @@ func TestPermit_DownloadFile(t *testing.T) {
 					RegularFilesOnly: true,
 				},
 			}),
+			FilePath:         os.TempDir(),
 			ExpectedDownload: ErrOnlyRegularFilesAllowed,
 		},
 		{
@@ -401,16 +413,260 @@ func TestPermit_DownloadFile(t *testing.T) {
 			}),
 			ExpectedDownload: ErrChrootViolation,
 		},
+		{
+			Name: "file owner mismatch",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					OwnerGet: "this-is-not-that-owner",
+				},
+			}),
+			ExpectedDownload: ErrFileOwnerMismatch,
+		},
+		{
+			Name: "file owner match",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					OwnerGet:       currentUser,
+					FollowSymLinks: true,
+				},
+			}),
+		},
+		{
+			Name: "file group mismatch",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					GroupGet: "this is not that group",
+				},
+			}),
+			ExpectedDownload: ErrFileGroupMismatch,
+		},
+		{
+			Name: "file group match",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					GroupGet:       currentGroup.Name,
+					FollowSymLinks: true,
+				},
+			}),
+		},
+		{
+			Name: "over the max file size limit in bytes",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					MaxFileSize:    1,
+					FollowSymLinks: true,
+				},
+			}),
+			ExpectedDownload: ErrFileTooBig,
+		},
+		{
+			Name: "below the max file size limit in bytes",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					MaxFileSize:    65536,
+					FollowSymLinks: true,
+				},
+			}),
+		},
 	}
 
-	path := "/root/file.bin"
+	path := createRandomFile("")
+	if path == "" {
+		t.Fatal("cant create a file")
+	}
+	defer os.Remove(path)
+
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
+			filePath := path
+			if tc.FilePath != "" {
+				filePath = tc.FilePath
+			}
 			err := tc.Permit.DownloadFile(model.FileInfo{
-				Path: &path,
+				Path: &filePath,
 			})
 			if tc.ExpectedDownload != nil {
 				assert.EqualError(t, err, tc.ExpectedDownload.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestPermit_UploadFile(t *testing.T) {
+	u, _ := user.Current()
+	if u == nil {
+		t.Fatal("cant get current user")
+	}
+	currentUser := u.Name
+	currentGroup, _ := user.LookupGroupId(u.Gid)
+	if currentGroup == nil {
+		t.Fatal("cant get current group")
+	}
+
+	testCases := []struct {
+		Name           string
+		Permit         *Permit
+		FilePath       string
+		Modes os.FileMode
+		ExpectedUpload error
+	}{
+		{
+			Name: "over the max file size limit in bytes",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					MaxFileSize:    1,
+				},
+			}),
+			ExpectedUpload: ErrFileTooBig,
+		},
+		{
+			Name: "not in a chroot",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					Chroot: "/var/chroot/mender/file_transfer",
+				},
+			}),
+			ExpectedUpload: ErrChrootViolation,
+		},
+		{
+			Name: "forbidden to follow links",
+			Permit: NewPermit(config.Limits{
+				Enabled:      true,
+				FileTransfer: config.FileTransferLimits{},
+			}),
+			ExpectedUpload: ErrFollowLinksForbidden,
+		},
+		{
+			Name: "file exists forbidden to overwrite",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: false,
+				},
+			}),
+			ExpectedUpload: ErrForbiddenToOverwriteFile,
+		},
+		{
+			Name: "file exists allowed to overwrite",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+				},
+			}),
+		},
+		{
+			Name: "file exists allowed to overwrite owner mismatch",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+					OwnerPut: "this is the other one",
+				},
+			}),
+			ExpectedUpload: ErrFileOwnerMismatch,
+		},
+		{
+			Name: "file exists allowed to overwrite owner match",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+					OwnerPut: currentUser,
+				},
+			}),
+		},
+		{
+			Name: "file exists allowed to overwrite group mismatch",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+					GroupPut: "this is the other one",
+				},
+			}),
+			ExpectedUpload: ErrFileGroupMismatch,
+		},
+		{
+			Name: "file exists allowed to overwrite group match",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+					GroupPut: currentGroup.Name,
+				},
+			}),
+		},
+		{
+			Name: "suid bit not allowed in modes",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+					AllowSuid: false,
+				},
+			}),
+			Modes: os.ModePerm|os.ModeSetuid,
+			ExpectedUpload: ErrSuidModeForbidden,
+		},
+		{
+			Name: "suid bit allowed in modes",
+			Permit: NewPermit(config.Limits{
+				Enabled: true,
+				FileTransfer: config.FileTransferLimits{
+					FollowSymLinks: true,
+					AllowOverwrite: true,
+					AllowSuid: true,
+				},
+			}),
+			Modes: os.ModePerm|os.ModeSetuid,
+		},
+	}
+
+	path := createRandomFile("")
+	if path == "" {
+		t.Fatal("cant create a file")
+	}
+	defer os.Remove(path)
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			filePath := path
+			if tc.FilePath != "" {
+				filePath = tc.FilePath
+			}
+			stat, _ := os.Stat(filePath)
+			size := stat.Size()
+			fileMode := uint32(stat.Mode())
+			if tc.Modes != 0 {
+				fileMode = uint32(tc.Modes)
+			}
+
+			err := tc.Permit.UploadFile(model.FileInfo{
+				Path: &filePath,
+				Size: &size,
+				Mode: &fileMode,
+			})
+			if tc.ExpectedUpload != nil {
+				assert.EqualError(t, err, tc.ExpectedUpload.Error())
 			} else {
 				assert.NoError(t, err)
 			}
