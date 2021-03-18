@@ -53,6 +53,10 @@ var (
 type Counters struct {
 	bytesTransferred           uint64
 	bytesReceived              uint64
+	bytesTransferred50           uint64
+	bytesReceived50              uint64
+	bytesTransferred51           uint64
+	bytesReceived51              uint64
 	bytesTransferredLastH      uint64
 	bytesReceivedLastH         uint64
 	currentTxRate              float64
@@ -75,6 +79,10 @@ var countersMutex = &sync.Mutex{}
 var deviceCountersLastH = Counters{
 	bytesTransferred:           0,
 	bytesReceived:              0,
+	bytesTransferred50:           0,
+	bytesReceived50:              0,
+	bytesTransferred51:           0,
+	bytesReceived51:              0,
 	bytesTransferredLastUpdate: time.Now(),
 	bytesReceivedLastUpdate:    time.Now(),
 	period:                     0,
@@ -354,16 +362,27 @@ func updatePerHourCounters() {
 	counterUpdateRunning = true
 	counterUpdateStarted <- true
 	expWeight:=math.Exp(-5.0/60.0)
+	deviceCountersLastH.bytesReceived50=0
+	deviceCountersLastH.bytesTransferred50=0
+	deviceCountersLastH.bytesReceived51=0
+	deviceCountersLastH.bytesTransferred51=0
 	for counterUpdateRunning {
 		//for minute := 0; minute < 60; minute++ {
-			time.Sleep(countersUpdateSleepTimeS)
+		countersMutex.Lock()
+		deviceCountersLastH.bytesReceived50=deviceCountersLastH.bytesReceived
+		deviceCountersLastH.bytesTransferred50=deviceCountersLastH.bytesTransferred
+		countersMutex.Unlock()
+
+		time.Sleep(countersUpdateSleepTimeS)
 			countersMutex.Lock()
+		deviceCountersLastH.bytesReceived51=deviceCountersLastH.bytesReceived
+		deviceCountersLastH.bytesTransferred51=deviceCountersLastH.bytesTransferred
 			deviceCountersLastH.currentTxRateW=expWeight*deviceCountersLastH.currentTxRateW+
-				deviceCountersLastH.currentTxRate-
-				expWeight*deviceCountersLastH.currentTxRate
+				float64(deviceCountersLastH.bytesTransferred51-deviceCountersLastH.bytesTransferred50)*0.2-
+				expWeight*float64(deviceCountersLastH.bytesTransferred51-deviceCountersLastH.bytesTransferred50)*0.2
 			deviceCountersLastH.currentRxRateW=expWeight*deviceCountersLastH.currentRxRateW+
-				deviceCountersLastH.currentRxRate-
-				expWeight*deviceCountersLastH.currentRxRate
+				float64(deviceCountersLastH.bytesReceived51-deviceCountersLastH.bytesReceived50)*0.2-
+				expWeight*float64(deviceCountersLastH.bytesReceived51-deviceCountersLastH.bytesReceived50)*0.2
 			if deviceCountersLastH.period >= math.MaxUint32-1 {
 				deviceCountersLastH.period = 0
 			}
