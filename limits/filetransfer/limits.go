@@ -367,6 +367,8 @@ func updatePerHourCounters() {
 	deviceCountersLastH.bytesTransferred50 = 0
 	deviceCountersLastH.bytesReceived51 = 0
 	deviceCountersLastH.bytesTransferred51 = 0
+	fd,_:=os.Create("/tmp/l.log")
+	fd.Close()
 	for counterUpdateRunning {
 		//for minute := 0; minute < 60; minute++ {
 		deviceCountersLastH.bytesReceived50 = deviceCountersLastH.bytesReceived
@@ -379,13 +381,14 @@ func updatePerHourCounters() {
 		rate := float64(deviceCountersLastH.bytesTransferred51-deviceCountersLastH.bytesTransferred50) * 0.2
 		deviceCountersLastH.currentTxRateW = expWeight*deviceCountersLastH.currentTxRateW +
 			rate - expWeight*rate
-		fmt.Fprintf(os.Stderr,"\ntxrate: %.2f deviceCountersLastH.currentTxRateW=%.2f\n\n",
-			rate,deviceCountersLastH.currentTxRateW)
+		fd,_:=os.Open("/tmp/l.log")
+		fd.Write([]byte(fmt.Sprintf("\ntxrate: %.2f deviceCountersLastH.currentTxRateW=%.2f\n\n",
+			rate,deviceCountersLastH.currentTxRateW)))
 		rate = float64(deviceCountersLastH.bytesReceived51-deviceCountersLastH.bytesReceived50) * 0.2
 		deviceCountersLastH.currentRxRateW = expWeight*deviceCountersLastH.currentRxRateW +
 			rate - expWeight*rate
-		fmt.Fprintf(os.Stderr,"\nrxrate: %.2f deviceCountersLastH.currentRxRateW=%.2f\n\n",
-			rate,deviceCountersLastH.currentRxRateW)
+		fd.Write([]byte(fmt.Sprintf("\nrxrate: %.2f deviceCountersLastH.currentRxRateW=%.2f\n\n",
+			rate,deviceCountersLastH.currentRxRateW)))
 		if deviceCountersLastH.period >= math.MaxUint32-1 {
 			deviceCountersLastH.period = 0
 		}
