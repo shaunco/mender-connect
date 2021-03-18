@@ -47,16 +47,22 @@ var (
 )
 
 var (
-	countersUpdateSleepTimeS = time.Minute
+	countersUpdateSleepTimeS = 5 * time.Second
 )
 
 type Counters struct {
 	bytesTransferred           uint64
 	bytesReceived              uint64
+	bytesTransferred50         uint64
+	bytesReceived50            uint64
+	bytesTransferred51         uint64
+	bytesReceived51            uint64
 	bytesTransferredLastH      uint64
 	bytesReceivedLastH         uint64
 	currentTxRate              float64
 	currentRxRate              float64
+	currentTxRateW             float64
+	currentRxRateW             float64
 	bytesTransferredLastUpdate time.Time
 	bytesReceivedLastUpdate    time.Time
 	period                     uint64
@@ -73,6 +79,10 @@ var countersMutex = &sync.Mutex{}
 var deviceCountersLastH = Counters{
 	bytesTransferred:           0,
 	bytesReceived:              0,
+	bytesTransferred50:         0,
+	bytesReceived50:            0,
+	bytesTransferred51:         0,
+	bytesReceived51:            0,
 	bytesTransferredLastUpdate: time.Now(),
 	bytesReceivedLastUpdate:    time.Now(),
 	period:                     0,
@@ -351,41 +361,59 @@ func updatePerHourCounters() {
 
 	counterUpdateRunning = true
 	counterUpdateStarted <- true
+	expWeight := math.Exp(-5.0 / 60.0)
+	deviceCountersLastH.bytesReceived50 = 0
+	deviceCountersLastH.bytesTransferred50 = 0
+	deviceCountersLastH.bytesReceived51 = 0
+	deviceCountersLastH.bytesTransferred51 = 0
 	for counterUpdateRunning {
-		for minute := 0; minute < 60; minute++ {
-			time.Sleep(countersUpdateSleepTimeS)
-			countersMutex.Lock()
-			if deviceCountersLastH.period >= math.MaxUint32-1 {
-				deviceCountersLastH.period = 0
-			}
-			deviceCountersLastH.period++
-			sinceLastUpdateS := time.Now().Unix() - deviceCountersLastH.bytesTransferredLastUpdate.Unix()
-			if deviceCountersLastH.bytesTransferred != 0 {
-				deviceCountersLastH.currentTxRate = float64(deviceCountersLastH.bytesTransferred*1.0) / float64(sinceLastUpdateS)
-			}
-			sinceLastUpdateS = time.Now().Unix() - deviceCountersLastH.bytesReceivedLastUpdate.Unix()
-			if deviceCountersLastH.bytesReceived != 0 {
-				deviceCountersLastH.currentRxRate = float64(deviceCountersLastH.bytesReceived*1.0) / float64(sinceLastUpdateS)
-			}
-			countersMutex.Unlock()
-		}
+		//for minute := 0; minute < 60; minute++ {
+		deviceCountersLastH.bytesReceived50 = deviceCountersLastH.bytesReceived
+		deviceCountersLastH.bytesTransferred50 = deviceCountersLastH.bytesTransferred
+
+		time.Sleep(countersUpdateSleepTimeS)
+		deviceCountersLastH.bytesReceived51 = deviceCountersLastH.bytesReceived
+		deviceCountersLastH.bytesTransferred51 = deviceCountersLastH.bytesTransferred
 		countersMutex.Lock()
-		deviceCountersLastH.bytesTransferredLastH = deviceCountersLastH.bytesTransferred
-		deviceCountersLastH.bytesReceivedLastH = deviceCountersLastH.bytesTransferred
-		deviceCountersLastH.bytesTransferred = 0
-		deviceCountersLastH.bytesReceived = 0
-		deviceCountersLastH.currentRxRate = 0.0
-		deviceCountersLastH.currentTxRate = 0.0
+		rate := float64(deviceCountersLastH.bytesTransferred51-deviceCountersLastH.bytesTransferred50) * 0.2
+		deviceCountersLastH.currentTxRateW = expWeight*deviceCountersLastH.currentTxRateW +
+			rate - expWeight*rate
+		rate = float64(deviceCountersLastH.bytesReceived51-deviceCountersLastH.bytesReceived50) * 0.2
+		deviceCountersLastH.currentRxRateW = expWeight*deviceCountersLastH.currentRxRateW +
+			rate - expWeight*rate
+		if deviceCountersLastH.period >= math.MaxUint32-1 {
+			deviceCountersLastH.period = 0
+		}
+		deviceCountersLastH.period++
+		sinceLastUpdateS := time.Now().Unix() - deviceCountersLastH.bytesTransferredLastUpdate.Unix()
+		if deviceCountersLastH.bytesTransferred != 0 {
+			deviceCountersLastH.currentTxRate = float64(deviceCountersLastH.bytesTransferred*1.0) / float64(sinceLastUpdateS)
+		}
+		sinceLastUpdateS = time.Now().Unix() - deviceCountersLastH.bytesReceivedLastUpdate.Unix()
+		if deviceCountersLastH.bytesReceived != 0 {
+			deviceCountersLastH.currentRxRate = float64(deviceCountersLastH.bytesReceived*1.0) / float64(sinceLastUpdateS)
+		}
 		countersMutex.Unlock()
+		//}
+		//countersMutex.Lock()
+		//deviceCountersLastH.bytesTransferredLastH = deviceCountersLastH.bytesTransferred
+		//deviceCountersLastH.bytesReceivedLastH = deviceCountersLastH.bytesTransferred
+		//deviceCountersLastH.bytesTransferred = 0
+		//deviceCountersLastH.bytesReceived = 0
+		//deviceCountersLastH.currentRxRate = 0.0
+		//deviceCountersLastH.currentTxRate = 0.0
+		//countersMutex.Unlock()
 	}
 }
 
-func GetCounters() (uint64, uint64, float64, float64) {
+func GetCounters() (uint64, uint64, float64, float64, float64, float64) {
 	countersMutex.Lock()
 	defer countersMutex.Unlock()
 
 	return deviceCountersLastH.bytesTransferred,
 		deviceCountersLastH.bytesReceived,
 		deviceCountersLastH.currentTxRate,
-		deviceCountersLastH.currentRxRate
+		deviceCountersLastH.currentRxRate,
+		deviceCountersLastH.currentTxRateW,
+		deviceCountersLastH.currentRxRateW
 }
