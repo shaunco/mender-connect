@@ -47,7 +47,7 @@ var (
 )
 
 var (
-	countersUpdateSleepTimeS = 5 * time.Second
+	countersUpdateSleepTimeS = 5
 )
 
 type Counters struct {
@@ -63,6 +63,12 @@ type Counters struct {
 	currentRxRate              float64
 	currentTxRateW             float64
 	currentRxRateW             float64
+	bytesTransferredLast1W     float64
+	bytesTransferredLast5W     float64
+	bytesTransferredLast15W    float64
+	bytesReceivedLast1W        float64
+	bytesReceivedLast5W        float64
+	bytesReceivedLast15W       float64
 	bytesTransferredLastUpdate time.Time
 	bytesReceivedLastUpdate    time.Time
 	period                     uint64
@@ -361,7 +367,9 @@ func updatePerHourCounters() {
 
 	counterUpdateRunning = true
 	counterUpdateStarted <- true
-	expWeight := math.Exp(-5.0 / 60.0)
+	expWeight1m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.016666666666666666)  // / 60.0)
+	expWeight5m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.003333333333333333)  // / (5*60.0))
+	expWeight15m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.001111111111111111) // / (15*60.0))
 	deviceCountersLastH.bytesReceived50 = 0
 	deviceCountersLastH.bytesTransferred50 = 0
 	deviceCountersLastH.bytesReceived51 = 0
@@ -370,17 +378,32 @@ func updatePerHourCounters() {
 		//for minute := 0; minute < 60; minute++ {
 		deviceCountersLastH.bytesReceived50 = deviceCountersLastH.bytesReceived
 		deviceCountersLastH.bytesTransferred50 = deviceCountersLastH.bytesTransferred
-
-		time.Sleep(countersUpdateSleepTimeS)
+		time.Sleep(time.Duration(countersUpdateSleepTimeS) * time.Second)
 		deviceCountersLastH.bytesReceived51 = deviceCountersLastH.bytesReceived
 		deviceCountersLastH.bytesTransferred51 = deviceCountersLastH.bytesTransferred
+
 		countersMutex.Lock()
+		dBytes := float64(deviceCountersLastH.bytesReceived51 - deviceCountersLastH.bytesReceived50)
+		deviceCountersLastH.bytesReceivedLast1W = expWeight1m*deviceCountersLastH.bytesReceivedLast1W +
+			dBytes - expWeight1m*dBytes
+		deviceCountersLastH.bytesReceivedLast5W = expWeight5m*deviceCountersLastH.bytesReceivedLast5W +
+			dBytes - expWeight5m*dBytes
+		deviceCountersLastH.bytesReceivedLast15W = expWeight15m*deviceCountersLastH.bytesReceivedLast15W +
+			dBytes - expWeight15m*dBytes
+		dBytes = float64(deviceCountersLastH.bytesTransferred51 - deviceCountersLastH.bytesTransferred50)
+		deviceCountersLastH.bytesTransferredLast1W = expWeight1m*deviceCountersLastH.bytesTransferredLast1W +
+			dBytes - expWeight1m*dBytes
+		deviceCountersLastH.bytesTransferredLast5W = expWeight5m*deviceCountersLastH.bytesTransferredLast5W +
+			dBytes - expWeight5m*dBytes
+		deviceCountersLastH.bytesTransferredLast15W = expWeight15m*deviceCountersLastH.bytesTransferredLast15W +
+			dBytes - expWeight15m*dBytes
+
 		rate := float64(deviceCountersLastH.bytesTransferred51-deviceCountersLastH.bytesTransferred50) * 0.2
-		deviceCountersLastH.currentTxRateW = expWeight*deviceCountersLastH.currentTxRateW +
-			rate - expWeight*rate
+		deviceCountersLastH.currentTxRateW = expWeight1m*deviceCountersLastH.currentTxRateW +
+			rate - expWeight1m*rate
 		rate = float64(deviceCountersLastH.bytesReceived51-deviceCountersLastH.bytesReceived50) * 0.2
-		deviceCountersLastH.currentRxRateW = expWeight*deviceCountersLastH.currentRxRateW +
-			rate - expWeight*rate
+		deviceCountersLastH.currentRxRateW = expWeight1m*deviceCountersLastH.currentRxRateW +
+			rate - expWeight1m*rate
 		if deviceCountersLastH.period >= math.MaxUint32-1 {
 			deviceCountersLastH.period = 0
 		}
@@ -406,7 +429,7 @@ func updatePerHourCounters() {
 	}
 }
 
-func GetCounters() (uint64, uint64, float64, float64, float64, float64) {
+func GetCounters() (uint64, uint64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	countersMutex.Lock()
 	defer countersMutex.Unlock()
 
@@ -415,5 +438,11 @@ func GetCounters() (uint64, uint64, float64, float64, float64, float64) {
 		deviceCountersLastH.currentTxRate,
 		deviceCountersLastH.currentRxRate,
 		deviceCountersLastH.currentTxRateW,
-		deviceCountersLastH.currentRxRateW
+		deviceCountersLastH.currentRxRateW,
+		deviceCountersLastH.bytesReceivedLast1W,
+		deviceCountersLastH.bytesReceivedLast5W,
+		deviceCountersLastH.bytesReceivedLast15W,
+		deviceCountersLastH.bytesTransferredLast1W,
+		deviceCountersLastH.bytesTransferredLast1W,
+		deviceCountersLastH.bytesTransferredLast15W
 }
