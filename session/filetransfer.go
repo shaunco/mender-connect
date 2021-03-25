@@ -502,16 +502,16 @@ func (h *FileTransferHandler) FileUploadHandler(
 		return errors.Wrap(err, "failed to commit uploaded file")
 	}
 
-	err = h.permit.PreserveModes(*params.Path, os.FileMode(*params.Mode))
-	if err != nil {
-		return errors.Wrap(err, "failed to preserve file mode "+
-			"("+os.FileMode(*params.Mode).String()+")")
-	}
-
 	err = h.permit.PreserveOwnerGroup(*params.Path, int(*params.UID), int(*params.GID))
 	if err != nil {
 		return errors.Wrap(err, "failed to preserve file owner/group "+
 			strconv.Itoa(int(*params.UID))+"/"+strconv.Itoa(int(*params.GID)))
+	}
+
+	err = h.permit.PreserveModes(*params.Path, os.FileMode(*params.Mode))
+	if err != nil {
+		return errors.Wrap(err, "failed to preserve file mode "+
+			"("+os.FileMode(*params.Mode).String()+")")
 	}
 
 	fd = nil

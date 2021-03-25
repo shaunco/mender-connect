@@ -106,7 +106,7 @@ type FileTransferLimits struct {
 }
 
 type Limits struct {
-	Enabled      bool               `json:"-"`
+	Enabled      bool               `json:"Enabled"`
 	FileTransfer FileTransferLimits `json:"FileTransfer"`
 }
 
@@ -309,7 +309,6 @@ func (c *MenderShellConfig) Validate() (err error) {
 	c.HTTPSClient.Validate()
 
 	// permit by default, probably will be changed after integration test is modified
-	c.Limits.Enabled = false
 	c.Limits.FileTransfer.PreserveMode = true
 	c.Limits.FileTransfer.PreserveOwner = true
 	log.Debugf("Verified configuration = %#v", c)
