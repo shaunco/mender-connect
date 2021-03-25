@@ -375,12 +375,30 @@ func updatePerHourCounters() {
 	deviceCountersLastH.bytesTransferred50 = 0
 	deviceCountersLastH.bytesReceived51 = 0
 	deviceCountersLastH.bytesTransferred51 = 0
-	deviceCountersLastH.bytesReceivedLast1W=0.0
-	deviceCountersLastH.bytesReceivedLast5W=0.0
-	deviceCountersLastH.bytesReceivedLast15W=0.0
-	deviceCountersLastH.bytesTransferredLast1W=0.0
-	deviceCountersLastH.bytesTransferredLast5W=0.0
-	deviceCountersLastH.bytesTransferredLast15W=0.0
+	deviceCountersLastH.bytesReceivedLast1W = 0.0
+	deviceCountersLastH.bytesReceivedLast5W = 0.0
+	deviceCountersLastH.bytesReceivedLast15W = 0.0
+	deviceCountersLastH.bytesTransferredLast1W = 0.0
+	deviceCountersLastH.bytesTransferredLast5W = 0.0
+	deviceCountersLastH.bytesTransferredLast15W = 0.0
+
+	for counterUpdateRunning {
+		bytesRXLastMinute0 := deviceCountersLastH.bytesReceived
+		bytesTXLastMinute0 := deviceCountersLastH.bytesTransferred
+		bytesRXLastMinute := uint64(0)
+		bytesTXLastMinute := uint64(0)
+		for i := 0; i < 12; i++ {
+			time.Sleep(time.Duration(countersUpdateSleepTimeS) * time.Second)
+			bytesRXLastMinute = deviceCountersLastH.bytesReceived - bytesRXLastMinute0
+			bytesTXLastMinute = deviceCountersLastH.bytesTransferred - bytesTXLastMinute0
+			deviceCountersLastH.bytesReceivedLast1W = expWeight1m*deviceCountersLastH.bytesReceivedLast1W +
+				float64(bytesRXLastMinute) - expWeight1m*float64(bytesRXLastMinute)
+			deviceCountersLastH.bytesTransferredLast1W = expWeight1m*deviceCountersLastH.bytesTransferredLast1W +
+				float64(bytesTXLastMinute) - expWeight1m*float64(bytesTXLastMinute)
+		}
+	}
+
+	return
 	for counterUpdateRunning {
 		//for minute := 0; minute < 60; minute++ {
 		bytesReceived50 := deviceCountersLastH.bytesReceived
