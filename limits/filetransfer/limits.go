@@ -397,7 +397,7 @@ func updatePerHourCounters() {
 			dBytes - expWeight5m*dBytes
 		deviceCountersLastH.bytesReceivedLast15W = expWeight15m*deviceCountersLastH.bytesReceivedLast15W +
 			dBytes - expWeight15m*dBytes
-		fmt.Fprintf(os.Stderr, "\nperiod:%d dBytes:%.2f rx 1,5,15m: %.2f,%.2f,%.2f",
+		fmt.Fprintf(os.Stderr, "\nperiod:%d dBytes:%.2f rx 1,5,15m: %.2f,%.2f,%.2f\n",
 			deviceCountersLastH.period, dBytes, deviceCountersLastH.bytesReceivedLast1W, deviceCountersLastH.bytesReceivedLast5W, deviceCountersLastH.bytesReceivedLast15W)
 		dBytes = float64(bytesTransferred51 - bytesTransferred50)
 		deviceCountersLastH.bytesTransferredLast1W = expWeight1m*deviceCountersLastH.bytesTransferredLast1W +
