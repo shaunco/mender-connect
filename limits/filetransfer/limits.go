@@ -362,7 +362,7 @@ func updatePerHourCounters() {
 		bytesTXLastMinute0 := deviceCounters.bytesTransferred
 		bytesRXLastMinute := uint64(0)
 		bytesTXLastMinute := uint64(0)
-		for i := 0; i < int(time.Minute)/countersUpdateSleepTimeS/int(time.Second); i++ {
+		for i := 0; i < int(int64(time.Minute)/int64(countersUpdateSleepTimeS)/int64(time.Second)); i++ {
 			time.Sleep(time.Duration(countersUpdateSleepTimeS) * time.Second)
 			bytesRXLastMinute += deviceCounters.bytesReceived - bytesRXLastMinute0
 			bytesTXLastMinute += deviceCounters.bytesTransferred - bytesTXLastMinute0
