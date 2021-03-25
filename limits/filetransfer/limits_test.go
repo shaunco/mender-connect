@@ -38,10 +38,10 @@ func TestGetCounters(t *testing.T) {
 	initRX := rand.Uint64()
 	initTXRate := rand.Float64()
 	initRXRate := rand.Float64()
-	deviceCountersLastH.bytesTransferred = initTX
-	deviceCountersLastH.bytesReceived = initRX
-	deviceCountersLastH.currentRxRate = initRXRate
-	deviceCountersLastH.currentTxRate = initTXRate
+	deviceCounters.bytesTransferred = initTX
+	deviceCounters.bytesReceived = initRX
+	deviceCounters.currentRxRate = initRXRate
+	deviceCounters.currentTxRate = initTXRate
 
 	time.Sleep(8 * time.Second)
 	tx, rx, txRate, rxRate := GetCounters()
@@ -52,7 +52,7 @@ func TestGetCounters(t *testing.T) {
 }
 
 func TestUpdatePerHourCounters(t *testing.T) {
-	deviceCountersLastH = Counters{
+	deviceCounters = Counters{
 		bytesTransferred:           0,
 		bytesReceived:              0,
 		bytesTransferredLastUpdate: time.Now(),
@@ -161,18 +161,18 @@ func TestUpdatePerHourCounters(t *testing.T) {
 	}()
 	counterUpdateRunning = false
 	time.Sleep(6 * time.Second)
-	totalBytesReceivedRateExpected = float64(totalBytesReceivedExpected) / float64(deviceCountersLastH.period)
-	totalBytesSentRateExpected = float64(totalBytesSentExpected) / float64(deviceCountersLastH.period)
+	totalBytesReceivedRateExpected = float64(totalBytesReceivedExpected) / float64(deviceCounters.period)
+	totalBytesSentRateExpected = float64(totalBytesSentExpected) / float64(deviceCounters.period)
 	t.Logf("expected rates: tx/rx rates: %.2f/%.2f counters:%+v",
 		totalBytesReceivedRateExpected,
 		totalBytesSentRateExpected,
-		deviceCountersLastH)
-	assert.True(t, math.Abs(totalBytesSentRateExpected-deviceCountersLastH.currentTxRate) < 0.0001)
-	assert.True(t, math.Abs(totalBytesReceivedRateExpected-deviceCountersLastH.currentRxRate) < 0.0001)
+		deviceCounters)
+	assert.True(t, math.Abs(totalBytesSentRateExpected-deviceCounters.currentTxRate) < 0.0001)
+	assert.True(t, math.Abs(totalBytesReceivedRateExpected-deviceCounters.currentRxRate) < 0.0001)
 	time.Sleep(2 * time.Second)
-	assert.Equal(t, totalBytesSentExpected, deviceCountersLastH.bytesTransferred)
-	assert.Equal(t, totalBytesReceivedExpected, deviceCountersLastH.bytesReceived)
-	//check that now the updatePerHourCounters should not be running, so after 2s the deviceCountersLastH rates should stay the same
+	assert.Equal(t, totalBytesSentExpected, deviceCounters.bytesTransferred)
+	assert.Equal(t, totalBytesReceivedExpected, deviceCounters.bytesReceived)
+	//check that now the updatePerHourCounters should not be running, so after 2s the deviceCounters rates should stay the same
 }
 
 func createRandomFile(prefix string) string {
