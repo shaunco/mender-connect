@@ -199,8 +199,8 @@ func (d *MenderShellDaemon) outputStatus() {
 	log.Infof("   tx/s rx/s %.2f %.2f", txps, rxps)
 	log.Infof("   tx/s rx/s %.2f %.2f (w)", txpsw, rxpsw)
 	log.Infof("   1m: tx rx %.2f %.2f (w)", tx1, rx1)
-	log.Infof("   1m: tx rx %.2f %.2f (w)", tx10, rx10)
-	log.Infof("   1m: tx rx %.2f %.2f (w)", tx15, rx15)
+	log.Infof("   10m: tx rx %.2f %.2f (w)", tx10, rx10)
+	log.Infof("   15m: tx rx %.2f %.2f (w)", tx15, rx15)
 	d.printStatus = false
 }
 

@@ -439,10 +439,10 @@ func GetCounters() (uint64, uint64, float64, float64, float64, float64, float64,
 		deviceCountersLastH.currentRxRate,
 		deviceCountersLastH.currentTxRateW,
 		deviceCountersLastH.currentRxRateW,
+		deviceCountersLastH.bytesTransferredLast1W,
+		deviceCountersLastH.bytesTransferredLast1W,
+		deviceCountersLastH.bytesTransferredLast15W,
 		deviceCountersLastH.bytesReceivedLast1W,
 		deviceCountersLastH.bytesReceivedLast5W,
-		deviceCountersLastH.bytesReceivedLast15W,
-		deviceCountersLastH.bytesTransferredLast1W,
-		deviceCountersLastH.bytesTransferredLast1W,
-		deviceCountersLastH.bytesTransferredLast15W
+		deviceCountersLastH.bytesReceivedLast15W
 }
