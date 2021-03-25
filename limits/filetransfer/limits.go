@@ -16,6 +16,7 @@ package filetransfer
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"os/user"
@@ -374,23 +375,31 @@ func updatePerHourCounters() {
 	deviceCountersLastH.bytesTransferred50 = 0
 	deviceCountersLastH.bytesReceived51 = 0
 	deviceCountersLastH.bytesTransferred51 = 0
+	deviceCountersLastH.bytesReceivedLast1W=0.0
+	deviceCountersLastH.bytesReceivedLast5W=0.0
+	deviceCountersLastH.bytesReceivedLast15W=0.0
+	deviceCountersLastH.bytesTransferredLast1W=0.0
+	deviceCountersLastH.bytesTransferredLast5W=0.0
+	deviceCountersLastH.bytesTransferredLast15W=0.0
 	for counterUpdateRunning {
 		//for minute := 0; minute < 60; minute++ {
-		deviceCountersLastH.bytesReceived50 = deviceCountersLastH.bytesReceived
-		deviceCountersLastH.bytesTransferred50 = deviceCountersLastH.bytesTransferred
+		bytesReceived50 := deviceCountersLastH.bytesReceived
+		bytesTransferred50 := deviceCountersLastH.bytesTransferred
 		time.Sleep(time.Duration(countersUpdateSleepTimeS) * time.Second)
-		deviceCountersLastH.bytesReceived51 = deviceCountersLastH.bytesReceived
-		deviceCountersLastH.bytesTransferred51 = deviceCountersLastH.bytesTransferred
+		bytesReceived51 := deviceCountersLastH.bytesReceived
+		bytesTransferred51 := deviceCountersLastH.bytesTransferred
 
 		countersMutex.Lock()
-		dBytes := float64(deviceCountersLastH.bytesReceived51 - deviceCountersLastH.bytesReceived50)
+		dBytes := float64(bytesReceived51 - bytesReceived50)
 		deviceCountersLastH.bytesReceivedLast1W = expWeight1m*deviceCountersLastH.bytesReceivedLast1W +
 			dBytes - expWeight1m*dBytes
 		deviceCountersLastH.bytesReceivedLast5W = expWeight5m*deviceCountersLastH.bytesReceivedLast5W +
 			dBytes - expWeight5m*dBytes
 		deviceCountersLastH.bytesReceivedLast15W = expWeight15m*deviceCountersLastH.bytesReceivedLast15W +
 			dBytes - expWeight15m*dBytes
-		dBytes = float64(deviceCountersLastH.bytesTransferred51 - deviceCountersLastH.bytesTransferred50)
+		fmt.Fprintf(os.Stderr, "\nperiod:%d dBytes:%.2f rx 1,5,15m: %.2f,%.2f,%.2f",
+			deviceCountersLastH.period, dBytes, deviceCountersLastH.bytesReceivedLast1W, deviceCountersLastH.bytesReceivedLast5W, deviceCountersLastH.bytesReceivedLast15W)
+		dBytes = float64(bytesTransferred51 - bytesTransferred50)
 		deviceCountersLastH.bytesTransferredLast1W = expWeight1m*deviceCountersLastH.bytesTransferredLast1W +
 			dBytes - expWeight1m*dBytes
 		deviceCountersLastH.bytesTransferredLast5W = expWeight5m*deviceCountersLastH.bytesTransferredLast5W +
@@ -440,7 +449,7 @@ func GetCounters() (uint64, uint64, float64, float64, float64, float64, float64,
 		deviceCountersLastH.currentTxRateW,
 		deviceCountersLastH.currentRxRateW,
 		deviceCountersLastH.bytesTransferredLast1W,
-		deviceCountersLastH.bytesTransferredLast1W,
+		deviceCountersLastH.bytesTransferredLast5W,
 		deviceCountersLastH.bytesTransferredLast15W,
 		deviceCountersLastH.bytesReceivedLast1W,
 		deviceCountersLastH.bytesReceivedLast5W,
