@@ -23,15 +23,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mendersoftware/mender-connect/config"
 	"github.com/mendersoftware/mender-connect/session/model"
 	"github.com/mendersoftware/mender-connect/utils"
-)
-
-const (
-	S_ISUID = 0004000
 )
 
 var (
@@ -167,11 +164,17 @@ func (p *Permit) DownloadFile(fileStat model.FileInfo) error {
 		return ErrChrootViolation
 	}
 
-	if !utils.FileOwnerMatches(filePath, p.limits.FileTransfer.OwnerGet) {
+	for _, owner := range p.limits.FileTransfer.OwnerGet {
+		if utils.FileOwnerMatches(filePath, owner) {
+			break
+		}
 		return ErrFileOwnerMismatch
 	}
 
-	if !utils.FileGroupMatches(filePath, p.limits.FileTransfer.GroupGet) {
+	for _, group := range p.limits.FileTransfer.GroupGet {
+		if utils.FileGroupMatches(filePath, group) {
+			break
+		}
 		return ErrFileGroupMismatch
 	}
 
@@ -210,8 +213,8 @@ func (p *Permit) BytesSent(n uint64) (belowLimit bool) {
 			deviceCounters.bytesTransferred += n
 		}
 	}
-	if p.limits.FileTransfer.Counters.MaxBytesTxPerHour > 0 &&
-		deviceCounters.bytesTransferred >= p.limits.FileTransfer.Counters.MaxBytesTxPerHour {
+	if p.limits.FileTransfer.Counters.MaxBytesTxPerMinute > 0 &&
+		uint64(deviceCounters.bytesTransferredLast1W) >= p.limits.FileTransfer.Counters.MaxBytesTxPerMinute {
 		belowLimit = false
 	}
 
@@ -239,8 +242,8 @@ func (p *Permit) BytesReceived(n uint64) (belowLimit bool) {
 			deviceCounters.bytesReceived += n
 		}
 	}
-	if p.limits.FileTransfer.Counters.MaxBytesRxPerHour > 0 &&
-		deviceCounters.bytesReceived >= p.limits.FileTransfer.Counters.MaxBytesRxPerHour {
+	if p.limits.FileTransfer.Counters.MaxBytesRxPerMinute > 0 &&
+		uint64(deviceCounters.bytesReceivedLast1W) >= p.limits.FileTransfer.Counters.MaxBytesRxPerMinute {
 		belowLimit = false
 	}
 
@@ -275,7 +278,7 @@ func (p *Permit) PreserveModes(path string, mode os.FileMode) error {
 		return nil
 	}
 
-	if (mode & S_ISUID) != 0 {
+	if (mode & syscall.S_ISUID) != 0 {
 		mode &= os.ModePerm
 		if p.limits.FileTransfer.Umask != "" {
 			umask, err := strconv.ParseUint(p.limits.FileTransfer.Umask, 8, 32)
@@ -298,7 +301,7 @@ func (p *Permit) PreserveModes(path string, mode os.FileMode) error {
 		mode &= os.ModePerm
 	}
 
-	if !p.limits.FileTransfer.DoNotPreserveMode {
+	if p.limits.FileTransfer.PreserveMode {
 		return os.Chmod(path, mode)
 	} else {
 		return nil
@@ -336,7 +339,7 @@ func (p *Permit) PreserveOwnerGroup(path string, uid int, gid int) error {
 	if forcedSet {
 		return os.Chown(path, uid, gid)
 	}
-	if !p.limits.FileTransfer.DoNotPreserveOwner {
+	if p.limits.FileTransfer.PreserveOwner {
 		return os.Chown(path, uid, gid)
 	} else {
 		return nil
@@ -344,6 +347,7 @@ func (p *Permit) PreserveOwnerGroup(path string, uid int, gid int) error {
 }
 
 func updatePerHourCounters() {
+	const one60th = 0.016666666666666666
 	if counterUpdateRunning {
 		counterUpdateStarted <- false
 		return
@@ -351,7 +355,9 @@ func updatePerHourCounters() {
 
 	counterUpdateRunning = true
 	counterUpdateStarted <- true
-	expWeight1m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.016666666666666666) // / 60.0)
+	//exponential decrease for "avg" over 1 minute: \exp(-dt[s]/(1*60[s]))
+	expWeight1m := math.Exp(-float64(countersUpdateSleepTimeS) * one60th) // / 60.0)
+	//analogy to the uptime weighted avg
 	//expWeight5m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.003333333333333333)  // / (5*60.0))
 	//expWeight15m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.001111111111111111) // / (15*60.0))
 	deviceCounters.bytesReceivedLast1W = 0.0
@@ -371,8 +377,8 @@ func updatePerHourCounters() {
 			deviceCounters.bytesTransferredLast1W = expWeight1m*deviceCounters.bytesTransferredLast1W +
 				float64(bytesTXLastMinute) - expWeight1m*float64(bytesTXLastMinute)
 		}
-		deviceCounters.rateTransferredLastMinute = float64(bytesTXLastMinute) * 0.016666666666666666
-		deviceCounters.rateReceivedLastMinute = float64(bytesRXLastMinute) * 0.016666666666666666
+		deviceCounters.rateTransferredLastMinute = float64(bytesTXLastMinute) * one60th
+		deviceCounters.rateReceivedLastMinute = float64(bytesRXLastMinute) * one60th
 	}
 }
 

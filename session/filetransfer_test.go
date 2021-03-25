@@ -119,9 +119,9 @@ func TestFileTransferUpload(t *testing.T) {
 			LimitsEnabled: true,
 			Limits: config.FileTransferLimits{
 				FollowSymLinks: true,
-				Counters: config.Counters{
-					MaxBytesTxPerHour: 1,
-					MaxBytesRxPerHour: 1,
+				Counters: config.RateLimits{
+					MaxBytesTxPerMinute: 1,
+					MaxBytesRxPerMinute: 1,
 				},
 			},
 

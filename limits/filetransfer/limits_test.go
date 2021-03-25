@@ -40,11 +40,11 @@ func TestGetCounters(t *testing.T) {
 	initRXRate := rand.Float64()
 	deviceCounters.bytesTransferred = initTX
 	deviceCounters.bytesReceived = initRX
-	deviceCounters.currentRxRate = initRXRate
-	deviceCounters.currentTxRate = initTXRate
+	deviceCounters.rateReceivedLastMinute = initRXRate
+	deviceCounters.rateTransferredLastMinute = initTXRate
 
 	time.Sleep(8 * time.Second)
-	tx, rx, txRate, rxRate := GetCounters()
+	tx, rx, txRate, rxRate, _, _ := GetCounters()
 	assert.Equal(t, initTX, tx)
 	assert.Equal(t, initRX, rx)
 	assert.True(t, math.Abs(initTXRate-txRate) <= 0.001)
@@ -59,7 +59,7 @@ func TestUpdatePerHourCounters(t *testing.T) {
 		bytesReceivedLastUpdate:    time.Now(),
 		period:                     0,
 	}
-	countersUpdateSleepTimeS = time.Second
+	countersUpdateSleepTimeS = 1
 
 	NewPermit(config.Limits{})
 	NewPermit(config.Limits{})
@@ -72,17 +72,15 @@ func TestUpdatePerHourCounters(t *testing.T) {
 			FollowSymLinks: false,
 			AllowOverwrite: false,
 			OwnerPut:       "",
-			OwnerGet:       "",
+			OwnerGet:       []string{},
 			Umask:          "",
 			MaxFileSize:    0,
-			Counters: config.Counters{
-				MaxBytesTxPerHour: 0,
-				MaxBytesRxPerHour: 0,
+			Counters: config.RateLimits{
+				MaxBytesTxPerMinute: 0,
+				MaxBytesRxPerMinute: 0,
 			},
-			AllowSuid:          false,
-			RegularFilesOnly:   false,
-			DoNotPreserveMode:  false,
-			DoNotPreserveOwner: false,
+			AllowSuid:        false,
+			RegularFilesOnly: false,
 		},
 	})
 	thread1BytesSent := []uint64{
@@ -167,8 +165,8 @@ func TestUpdatePerHourCounters(t *testing.T) {
 		totalBytesReceivedRateExpected,
 		totalBytesSentRateExpected,
 		deviceCounters)
-	assert.True(t, math.Abs(totalBytesSentRateExpected-deviceCounters.currentTxRate) < 0.0001)
-	assert.True(t, math.Abs(totalBytesReceivedRateExpected-deviceCounters.currentRxRate) < 0.0001)
+	assert.True(t, math.Abs(totalBytesSentRateExpected-deviceCounters.rateTransferredLastMinute) < 0.0001)
+	assert.True(t, math.Abs(totalBytesReceivedRateExpected-deviceCounters.rateReceivedLastMinute) < 0.0001)
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, totalBytesSentExpected, deviceCounters.bytesTransferred)
 	assert.Equal(t, totalBytesReceivedExpected, deviceCounters.bytesReceived)
@@ -220,17 +218,17 @@ func TestPermit_PreserveOwnerGroup(t *testing.T) {
 			FollowSymLinks: false,
 			AllowOverwrite: false,
 			OwnerPut:       "",
-			OwnerGet:       "",
+			OwnerGet:       []string{},
 			Umask:          "",
 			MaxFileSize:    0,
-			Counters: config.Counters{
-				MaxBytesTxPerHour: 0,
-				MaxBytesRxPerHour: 0,
+			Counters: config.RateLimits{
+				MaxBytesTxPerMinute: 0,
+				MaxBytesRxPerMinute: 0,
 			},
-			AllowSuid:          false,
-			RegularFilesOnly:   false,
-			DoNotPreserveMode:  false,
-			DoNotPreserveOwner: false,
+			AllowSuid:        false,
+			RegularFilesOnly: false,
+			PreserveMode:     true,
+			PreserveOwner:    true,
 		},
 	})
 
@@ -269,17 +267,17 @@ func TestPermit_PreserveModes(t *testing.T) {
 			FollowSymLinks: false,
 			AllowOverwrite: false,
 			OwnerPut:       "",
-			OwnerGet:       "",
+			OwnerGet:       []string{},
 			Umask:          "",
 			MaxFileSize:    0,
-			Counters: config.Counters{
-				MaxBytesTxPerHour: 0,
-				MaxBytesRxPerHour: 0,
+			Counters: config.RateLimits{
+				MaxBytesTxPerMinute: 0,
+				MaxBytesRxPerMinute: 0,
 			},
-			AllowSuid:          false,
-			RegularFilesOnly:   false,
-			DoNotPreserveMode:  false,
-			DoNotPreserveOwner: false,
+			AllowSuid:        false,
+			RegularFilesOnly: false,
+			PreserveMode:     true,
+			PreserveOwner:    true,
 		},
 	})
 
@@ -321,7 +319,7 @@ func TestPermit_PreserveModes(t *testing.T) {
 			actualMode := stat.Mode()
 			if (stat.Mode() & os.ModeSetuid) != 0 {
 				actualMode &= os.ModePerm
-				actualMode |= S_ISUID
+				actualMode |= syscall.S_ISUID
 			} else {
 				actualMode &= os.ModePerm
 			}
@@ -341,17 +339,15 @@ func TestPermit_BelowMaxAllowedFileSize(t *testing.T) {
 			FollowSymLinks: false,
 			AllowOverwrite: false,
 			OwnerPut:       "",
-			OwnerGet:       "",
+			OwnerGet:       []string{},
 			Umask:          "",
 			MaxFileSize:    0,
-			Counters: config.Counters{
-				MaxBytesTxPerHour: 0,
-				MaxBytesRxPerHour: 0,
+			Counters: config.RateLimits{
+				MaxBytesTxPerMinute: 0,
+				MaxBytesRxPerMinute: 0,
 			},
-			AllowSuid:          false,
-			RegularFilesOnly:   false,
-			DoNotPreserveMode:  false,
-			DoNotPreserveOwner: false,
+			AllowSuid:        false,
+			RegularFilesOnly: false,
 		},
 	})
 
@@ -432,7 +428,7 @@ func TestPermit_DownloadFile(t *testing.T) {
 			Permit: NewPermit(config.Limits{
 				Enabled: true,
 				FileTransfer: config.FileTransferLimits{
-					OwnerGet: "this-is-not-that-owner",
+					OwnerGet: []string{"this-is-not-that-owner"},
 				},
 			}),
 			ExpectedDownload: ErrFileOwnerMismatch,
@@ -442,7 +438,7 @@ func TestPermit_DownloadFile(t *testing.T) {
 			Permit: NewPermit(config.Limits{
 				Enabled: true,
 				FileTransfer: config.FileTransferLimits{
-					OwnerGet:       currentUser,
+					OwnerGet:       []string{currentUser},
 					FollowSymLinks: true,
 				},
 			}),
@@ -452,7 +448,7 @@ func TestPermit_DownloadFile(t *testing.T) {
 			Permit: NewPermit(config.Limits{
 				Enabled: true,
 				FileTransfer: config.FileTransferLimits{
-					GroupGet: "this is not that group",
+					GroupGet: []string{"this is not that group"},
 				},
 			}),
 			ExpectedDownload: ErrFileGroupMismatch,
@@ -462,7 +458,7 @@ func TestPermit_DownloadFile(t *testing.T) {
 			Permit: NewPermit(config.Limits{
 				Enabled: true,
 				FileTransfer: config.FileTransferLimits{
-					GroupGet:       currentGroup.Name,
+					GroupGet:       []string{currentGroup.Name},
 					FollowSymLinks: true,
 				},
 			}),

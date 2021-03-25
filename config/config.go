@@ -61,14 +61,14 @@ type SessionsConfig struct {
 
 // Counter for the limits  and restrictions for the File Transfer
 //on and off the device(MEN-4325)
-type Counters struct {
-	// Maximum bytes count allowed to transfer per hours
+type RateLimits struct {
+	// Maximum bytes count allowed to transfer per minute
 	// this is per device global limit, which is consulted
 	// every time there is a transfer starting. if above
 	// the limit, we answer with error message indicating
 	// limit reached.
-	MaxBytesTxPerHour uint64
-	MaxBytesRxPerHour uint64
+	MaxBytesTxPerMinute uint64
+	MaxBytesRxPerMinute uint64
 }
 
 // Limits and restrictions for the File Transfer on and off the device(MEN-4325)
@@ -85,24 +85,24 @@ type FileTransferLimits struct {
 	// set the owner of new files to OwnerPut
 	GroupPut string
 	// allow to get only files owned by OwnerGet
-	OwnerGet string
+	OwnerGet []string
 	// allow to get only files owned by OwnerGet
-	GroupGet string
+	GroupGet []string
 	// umask for new files
 	Umask string
 	// Maximum allowed file size
 	MaxFileSize uint64
-	// Global counters
-	Counters Counters
+	// File transfer rate limits
+	Counters RateLimits
 	// If true it is allowed to upload files with set user id on execute bit set
 	AllowSuid bool
 	// By default we only allow to send/put regular files
 	RegularFilesOnly bool
 	// By default we preserve the file modes but set one according to
 	//the current umask or configured Umask above
-	DoNotPreserveMode bool
+	PreserveMode bool
 	// By default we preserve the owner of the file uploaded
-	DoNotPreserveOwner bool
+	PreserveOwner bool
 }
 
 type Limits struct {
@@ -308,8 +308,10 @@ func (c *MenderShellConfig) Validate() (err error) {
 
 	c.HTTPSClient.Validate()
 
-	//enforce the limits by default, if set to false it means permit everything
-	c.Limits.Enabled = true
+	// permit by default, probably will be changed after integration test is modified
+	c.Limits.Enabled = false
+	c.Limits.FileTransfer.PreserveMode = true
+	c.Limits.FileTransfer.PreserveOwner = true
 	log.Debugf("Verified configuration = %#v", c)
 
 	return nil
