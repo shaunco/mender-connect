@@ -347,38 +347,38 @@ func (p *Permit) PreserveOwnerGroup(path string, uid int, gid int) error {
 }
 
 func updatePerHourCounters() {
-	const one60th = 0.016666666666666666
 	if counterUpdateRunning {
 		counterUpdateStarted <- false
 		return
 	}
-
 	counterUpdateRunning = true
 	counterUpdateStarted <- true
-	//exponential decrease for "avg" over 1 minute: \exp(-dt[s]/(1*60[s]))
-	expWeight1m := math.Exp(-float64(countersUpdateSleepTimeS) * one60th) // / 60.0)
-	//analogy to the uptime weighted avg
-	//expWeight5m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.003333333333333333)  // / (5*60.0))
-	//expWeight15m := math.Exp(-float64(countersUpdateSleepTimeS) * 0.001111111111111111) // / (15*60.0))
-	deviceCounters.bytesReceivedLast1W = 0.0
-	deviceCounters.bytesTransferredLast1W = 0.0
-
+	var (
+		lastRX uint64
+		lastTX uint64
+		avgRX  float64
+		avgTX  float64
+		// exp factor: 1 - exp(-dt[s]/(1*60[s]))
+		_w1 = math.Exp(-(float64(countersUpdateSleepTimeS) * (1.0 / 60.0)))
+		w1  = 1 - _w1
+	)
+	tick := time.NewTicker(time.Duration(countersUpdateSleepTimeS) * time.Second)
+	defer tick.Stop()
 	for counterUpdateRunning {
-		bytesRXLastMinute0 := deviceCounters.bytesReceived
-		bytesTXLastMinute0 := deviceCounters.bytesTransferred
-		bytesRXLastMinute := uint64(0)
-		bytesTXLastMinute := uint64(0)
-		for i := 0; i < int(int64(time.Minute)/int64(countersUpdateSleepTimeS)/int64(time.Second)); i++ {
-			time.Sleep(time.Duration(countersUpdateSleepTimeS) * time.Second)
-			bytesRXLastMinute += deviceCounters.bytesReceived - bytesRXLastMinute0
-			bytesTXLastMinute += deviceCounters.bytesTransferred - bytesTXLastMinute0
-			deviceCounters.bytesReceivedLast1W = expWeight1m*deviceCounters.bytesReceivedLast1W +
-				float64(bytesRXLastMinute) - expWeight1m*float64(bytesRXLastMinute)
-			deviceCounters.bytesTransferredLast1W = expWeight1m*deviceCounters.bytesTransferredLast1W +
-				float64(bytesTXLastMinute) - expWeight1m*float64(bytesTXLastMinute)
+		select {
+		case <-tick.C:
+			rxTot := deviceCounters.bytesTransferred
+			txTot := deviceCounters.bytesReceived
+			rx := rxTot - lastRX
+			tx := txTot - lastTX
+			lastRX = rxTot
+			lastTX = rxTot
+			// avg[n+1] = w * Y[n] + (1 - w) avg[n]
+			avgRX = w1*float64(rx) + _w1*avgRX
+			avgTX = w1*float64(tx) + _w1*avgTX
+			deviceCounters.rateTransferredLastMinute = avgTX
+			deviceCounters.rateReceivedLastMinute = avgRX
 		}
-		deviceCounters.rateTransferredLastMinute = float64(bytesTXLastMinute) * one60th
-		deviceCounters.rateReceivedLastMinute = float64(bytesRXLastMinute) * one60th
 	}
 }
 
