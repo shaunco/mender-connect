@@ -194,10 +194,9 @@ func (d *MenderShellDaemon) outputStatus() {
 		log.Infof("   shell:%s", s.GetShellCommandPath())
 	}
 	log.Info("  file-transfer:")
-	tx, rx, txPerS, rxPerS, tx1, rx1 := filetransfer.GetCounters()
+	tx, rx, tx1m, rx1m := filetransfer.GetCounters()
 	log.Infof("   total: tx/rx %d/%d", tx, rx)
-	log.Infof("   1m: tx/s rx/s %.2f %.2f", txPerS, rxPerS)
-	log.Infof("   1m: tx rx %.2f %.2f (w)", tx1, rx1)
+	log.Infof("   1m: tx rx %.2f %.2f (w)", tx1m, rx1m)
 	d.printStatus = false
 }
 

@@ -36,30 +36,27 @@ func TestGetCounters(t *testing.T) {
 
 	initTX := rand.Uint64()
 	initRX := rand.Uint64()
-	initTXRate := rand.Float64()
-	initRXRate := rand.Float64()
 	deviceCounters.bytesTransferred = initTX
 	deviceCounters.bytesReceived = initRX
-	deviceCounters.rateReceivedLastMinute = initRXRate
-	deviceCounters.rateTransferredLastMinute = initTXRate
+	deviceCounters.bytesTransferredAvg1m = 0.0
+	deviceCounters.bytesTransferredAvg1m = 0.0
 
 	time.Sleep(8 * time.Second)
-	tx, rx, txRate, rxRate, _, _ := GetCounters()
+	tx, rx, txm1, rxm1 := GetCounters()
 	assert.Equal(t, initTX, tx)
 	assert.Equal(t, initRX, rx)
-	assert.True(t, math.Abs(initTXRate-txRate) <= 0.001)
-	assert.True(t, math.Abs(initRXRate-rxRate) <= 0.001)
+	assert.True(t, math.Abs(txm1) <= 0.001)
+	assert.True(t, math.Abs(rxm1) <= 0.001)
 }
 
-func TestUpdatePerHourCounters(t *testing.T) {
+func TestUpdateCounters(t *testing.T) {
 	deviceCounters = Counters{
 		bytesTransferred:           0,
 		bytesReceived:              0,
 		bytesTransferredLastUpdate: time.Now(),
 		bytesReceivedLastUpdate:    time.Now(),
-		period:                     0,
 	}
-	countersUpdateSleepTimeS = 1
+	countersUpdateSleepTimeS = 5
 
 	NewPermit(config.Limits{})
 	NewPermit(config.Limits{})
@@ -123,8 +120,8 @@ func TestUpdatePerHourCounters(t *testing.T) {
 		2048,
 		2048,
 	}
-	totalBytesReceivedRateExpected := float64(0.0)
-	totalBytesSentRateExpected := float64(0.0)
+	bytesTxAvg1mExpected := 1663.0
+	bytesRxAvg1mExpected := 1663.0
 	totalBytesReceivedExpected := uint64(0)
 	for _, b := range thread1BytesReceived {
 		totalBytesReceivedExpected += b
@@ -157,16 +154,16 @@ func TestUpdatePerHourCounters(t *testing.T) {
 			i--
 		}
 	}()
+	time.Sleep(18 * time.Second)
 	counterUpdateRunning = false
-	time.Sleep(6 * time.Second)
-	totalBytesReceivedRateExpected = float64(totalBytesReceivedExpected) / float64(deviceCounters.period)
-	totalBytesSentRateExpected = float64(totalBytesSentExpected) / float64(deviceCounters.period)
-	t.Logf("expected rates: tx/rx rates: %.2f/%.2f counters:%+v",
-		totalBytesReceivedRateExpected,
-		totalBytesSentRateExpected,
-		deviceCounters)
-	assert.True(t, math.Abs(totalBytesSentRateExpected-deviceCounters.rateTransferredLastMinute) < 0.0001)
-	assert.True(t, math.Abs(totalBytesReceivedRateExpected-deviceCounters.rateReceivedLastMinute) < 0.0001)
+	t.Logf("after 18s; +%v %.2f vs %.2f=%.2f %.2f vs %.2f=%.2f",
+		deviceCounters,
+		bytesTxAvg1mExpected, deviceCounters.bytesTransferredAvg1m,
+		math.Abs(bytesTxAvg1mExpected-deviceCounters.bytesTransferredAvg1m),
+		bytesRxAvg1mExpected, deviceCounters.bytesReceivedAvg1m,
+		math.Abs(bytesRxAvg1mExpected-deviceCounters.bytesReceivedAvg1m))
+	assert.True(t, math.Abs(bytesTxAvg1mExpected-deviceCounters.bytesTransferredAvg1m) < 0.01*bytesTxAvg1mExpected)
+	assert.True(t, math.Abs(bytesRxAvg1mExpected-deviceCounters.bytesReceivedAvg1m) < 0.01*bytesTxAvg1mExpected)
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, totalBytesSentExpected, deviceCounters.bytesTransferred)
 	assert.Equal(t, totalBytesReceivedExpected, deviceCounters.bytesReceived)

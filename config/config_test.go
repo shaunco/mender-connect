@@ -180,8 +180,6 @@ func validateConfiguration(t *testing.T, actual *MenderShellConfig) {
 				AllowOverwrite: false,
 				OwnerPut:       "",
 				GroupPut:       "",
-				OwnerGet:       []string{""},
-				GroupGet:       []string{""},
 				Umask:          "",
 				MaxFileSize:    0,
 				Counters: RateLimits{

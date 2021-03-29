@@ -50,13 +50,10 @@ var (
 type Counters struct {
 	bytesTransferred           uint64
 	bytesReceived              uint64
-	rateTransferredLastMinute  float64
-	rateReceivedLastMinute     float64
-	bytesTransferredLast1W     float64
-	bytesReceivedLast1W        float64
+	bytesTransferredAvg1m      float64
+	bytesReceivedAvg1m         float64
 	bytesTransferredLastUpdate time.Time
 	bytesReceivedLastUpdate    time.Time
-	period                     uint64
 }
 
 type Permit struct {
@@ -72,7 +69,6 @@ var deviceCounters = Counters{
 	bytesReceived:              0,
 	bytesTransferredLastUpdate: time.Now(),
 	bytesReceivedLastUpdate:    time.Now(),
-	period:                     0,
 }
 var counterUpdateRunning = false
 var counterUpdateStarted = make(chan bool, 1)
@@ -214,7 +210,7 @@ func (p *Permit) BytesSent(n uint64) (belowLimit bool) {
 		}
 	}
 	if p.limits.FileTransfer.Counters.MaxBytesTxPerMinute > 0 &&
-		uint64(deviceCounters.bytesTransferredLast1W) >= p.limits.FileTransfer.Counters.MaxBytesTxPerMinute {
+		uint64(deviceCounters.bytesTransferredAvg1m) >= p.limits.FileTransfer.Counters.MaxBytesTxPerMinute {
 		belowLimit = false
 	}
 
@@ -243,7 +239,7 @@ func (p *Permit) BytesReceived(n uint64) (belowLimit bool) {
 		}
 	}
 	if p.limits.FileTransfer.Counters.MaxBytesRxPerMinute > 0 &&
-		uint64(deviceCounters.bytesReceivedLast1W) >= p.limits.FileTransfer.Counters.MaxBytesRxPerMinute {
+		uint64(deviceCounters.bytesReceivedAvg1m) >= p.limits.FileTransfer.Counters.MaxBytesRxPerMinute {
 		belowLimit = false
 	}
 
@@ -376,20 +372,21 @@ func updatePerHourCounters() {
 			// avg[n+1] = w * Y[n] + (1 - w) avg[n]
 			avgRX = w1*float64(rx) + _w1*avgRX
 			avgTX = w1*float64(tx) + _w1*avgTX
-			deviceCounters.rateTransferredLastMinute = avgTX
-			deviceCounters.rateReceivedLastMinute = avgRX
+
+			countersMutex.Lock()
+			deviceCounters.bytesTransferredAvg1m = avgTX
+			deviceCounters.bytesReceivedAvg1m = avgRX
+			countersMutex.Unlock()
 		}
 	}
 }
 
-func GetCounters() (uint64, uint64, float64, float64, float64, float64) {
+func GetCounters() (uint64, uint64, float64, float64) {
 	countersMutex.Lock()
 	defer countersMutex.Unlock()
 
 	return deviceCounters.bytesTransferred,
 		deviceCounters.bytesReceived,
-		deviceCounters.rateTransferredLastMinute,
-		deviceCounters.rateReceivedLastMinute,
-		deviceCounters.bytesTransferredLast1W,
-		deviceCounters.bytesReceivedLast1W
+		deviceCounters.bytesTransferredAvg1m,
+		deviceCounters.bytesReceivedAvg1m
 }
